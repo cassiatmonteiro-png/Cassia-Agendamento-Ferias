@@ -91,33 +91,26 @@ ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accrual_periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vacation_requests ENABLE ROW LEVEL SECURITY;
 
--- 6. Políticas RLS seguras
-DO $$ 
-BEGIN
-    BEGIN
-        CREATE POLICY "departments_policy" ON public.departments 
-            FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
+-- 6. Políticas RLS seguras e 100% idempotentes
+DROP POLICY IF EXISTS "departments_policy" ON public.departments;
+DROP POLICY IF EXISTS "departments_all" ON public.departments;
+CREATE POLICY "departments_policy" ON public.departments 
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-    BEGIN
-        CREATE POLICY "employees_policy" ON public.employees 
-            FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
+DROP POLICY IF EXISTS "employees_policy" ON public.employees;
+DROP POLICY IF EXISTS "employees_all" ON public.employees;
+CREATE POLICY "employees_policy" ON public.employees 
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-    BEGIN
-        CREATE POLICY "accrual_periods_policy" ON public.accrual_periods 
-            FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
+DROP POLICY IF EXISTS "accrual_periods_policy" ON public.accrual_periods;
+DROP POLICY IF EXISTS "accrual_periods_all" ON public.accrual_periods;
+CREATE POLICY "accrual_periods_policy" ON public.accrual_periods 
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-    BEGIN
-        CREATE POLICY "vacation_requests_policy" ON public.vacation_requests 
-            FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-END $$;
+DROP POLICY IF EXISTS "vacation_requests_policy" ON public.vacation_requests;
+DROP POLICY IF EXISTS "vacation_requests_all" ON public.vacation_requests;
+CREATE POLICY "vacation_requests_policy" ON public.vacation_requests 
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- 7. Carga de Departamentos
 INSERT INTO public.departments (id, name, code, description) VALUES
@@ -158,8 +151,13 @@ INSERT INTO public.vacation_requests (id, employee_id, accrual_period_id, start_
 (3, 3, 8, '2026-10-13', '2026-10-22', 10, 2, 0, 'APROVADA_RH', FALSE, 0, NULL, 'Férias de 10 dias após o feriado')
 ON CONFLICT (id) DO NOTHING;
 
--- 11. Ajustar contadores de auto-incremento para novas inserções
-SELECT setval('public.departments_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.departments));
-SELECT setval('public.employees_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.employees));
-SELECT setval('public.accrual_periods_id_seq', (SELECT COALESCE(MAX(id) ,1) FROM public.accrual_periods));
-SELECT setval('public.vacation_requests_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.vacation_requests));
+-- 11. Ajustar contadores de auto-incremento para novas inserções (seguro para SERIAL ou IDENTITY)
+DO $$
+BEGIN
+    PERFORM setval(pg_get_serial_sequence('public.departments', 'id'), COALESCE(MAX(id), 1)) FROM public.departments;
+    PERFORM setval(pg_get_serial_sequence('public.employees', 'id'), COALESCE(MAX(id), 1)) FROM public.employees;
+    PERFORM setval(pg_get_serial_sequence('public.accrual_periods', 'id'), COALESCE(MAX(id), 1)) FROM public.accrual_periods;
+    PERFORM setval(pg_get_serial_sequence('public.vacation_requests', 'id'), COALESCE(MAX(id), 1)) FROM public.vacation_requests;
+EXCEPTION WHEN OTHERS THEN
+    NULL; -- Ignora caso as sequences usem nomes manuais
+END $$;

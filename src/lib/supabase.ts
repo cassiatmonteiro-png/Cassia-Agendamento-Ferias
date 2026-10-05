@@ -194,14 +194,168 @@ export async function fetchAllFromSupabase(): Promise<{
 }
 
 /**
- * Salva uma nova solicitação de férias diretamente no Supabase
+ * Salva um departamento no Supabase
  */
-export async function insertVacationToSupabase(vac: VacationRequest): Promise<boolean> {
+export async function insertDepartmentToSupabase(dep: Department): Promise<{ success: boolean; error?: string }> {
   const client = getSupabaseClient();
-  if (!client) return false;
+  if (!client) return { success: false, error: 'Supabase não configurado' };
 
   try {
-    const { error } = await client.from('vacation_requests').insert({
+    const { error } = await client.from('departments').upsert({
+      id: dep.id,
+      name: dep.name,
+      code: dep.code,
+      description: dep.description || null,
+      max_concurrent_vacations: dep.maxConcurrentVacations || 1,
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Erro ao salvar departamento no Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Falha de conexão com Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Salva um colaborador no Supabase
+ */
+export async function insertEmployeeToSupabase(emp: Employee): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase não configurado' };
+
+  try {
+    const { error } = await client.from('employees').upsert({
+      id: emp.id,
+      name: emp.name,
+      email: emp.email,
+      cpf: emp.cpf,
+      registration_number: emp.registrationNumber,
+      role: emp.role,
+      department_id: emp.departmentId,
+      manager_id: emp.managerId || null,
+      hire_date: emp.hireDate,
+      job_title: emp.jobTitle,
+      active: emp.active !== false,
+    }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Erro ao salvar colaborador no Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Falha de conexão com Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Atualiza um colaborador no Supabase
+ */
+export async function updateEmployeeInSupabase(id: number, data: Partial<Employee>): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase não configurado' };
+
+  try {
+    const payload: any = { updated_at: new Date().toISOString() };
+    if (data.name !== undefined) payload.name = data.name;
+    if (data.email !== undefined) payload.email = data.email;
+    if (data.cpf !== undefined) payload.cpf = data.cpf;
+    if (data.registrationNumber !== undefined) payload.registration_number = data.registrationNumber;
+    if (data.role !== undefined) payload.role = data.role;
+    if (data.departmentId !== undefined) payload.department_id = data.departmentId;
+    if (data.managerId !== undefined) payload.manager_id = data.managerId || null;
+    if (data.hireDate !== undefined) payload.hire_date = data.hireDate;
+    if (data.jobTitle !== undefined) payload.job_title = data.jobTitle;
+    if (data.active !== undefined) payload.active = data.active;
+
+    const { error } = await client.from('employees').update(payload).eq('id', id);
+    if (error) {
+      console.warn('Erro ao atualizar colaborador no Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Falha de conexão com Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Salva períodos aquisitivos no Supabase
+ */
+export async function insertAccrualPeriodsToSupabase(periods: AccrualPeriod[]): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client || periods.length === 0) return { success: false, error: 'Supabase não configurado ou períodos vazios' };
+
+  try {
+    const payload = periods.map(p => ({
+      id: p.id,
+      employee_id: p.employeeId,
+      period_number: p.periodNumber,
+      acquisitive_start: p.acquisitiveStart,
+      acquisitive_end: p.acquisitiveEnd,
+      concessive_start: p.concessiveStart,
+      concessive_end: p.concessiveEnd,
+      total_days_entitled: p.totalDaysEntitled || 30,
+      days_taken: p.daysTaken || 0,
+      days_sold: p.daysSold || 0,
+      days_remaining: p.daysRemaining || 30,
+      status: p.status,
+    }));
+
+    const { error } = await client.from('accrual_periods').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('Erro ao salvar períodos no Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Falha de conexão com Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Atualiza saldo do período aquisitivo no Supabase
+ */
+export async function updateAccrualPeriodInSupabase(period: AccrualPeriod): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase não configurado' };
+
+  try {
+    const { error } = await client.from('accrual_periods').update({
+      days_taken: period.daysTaken,
+      days_sold: period.daysSold,
+      days_remaining: period.daysRemaining,
+      status: period.status,
+      updated_at: new Date().toISOString(),
+    }).eq('id', period.id);
+
+    if (error) {
+      console.warn('Erro ao atualizar período no Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Falha de conexão com Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Salva uma nova solicitação de férias diretamente no Supabase
+ */
+export async function insertVacationToSupabase(vac: VacationRequest): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase não configurado' };
+
+  try {
+    const { error } = await client.from('vacation_requests').upsert({
       id: vac.id,
       employee_id: vac.employeeId,
       accrual_period_id: vac.accrualPeriodId,
@@ -217,16 +371,16 @@ export async function insertVacationToSupabase(vac: VacationRequest): Promise<bo
       notes: vac.notes || null,
       created_at: vac.createdAt,
       updated_at: vac.updatedAt,
-    });
+    }, { onConflict: 'id' });
 
     if (error) {
       console.warn('Erro ao inserir férias no Supabase:', error.message);
-      return false;
+      return { success: false, error: error.message };
     }
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.error('Erro de conexão com Supabase:', err);
-    return false;
+    return { success: false, error: err.message };
   }
 }
 
@@ -237,16 +391,16 @@ export async function updateVacationStatusInSupabase(
   id: number, 
   status: VacationRequest['status'], 
   rejectionReason?: string
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   const client = getSupabaseClient();
-  if (!client) return false;
+  if (!client) return { success: false, error: 'Supabase não configurado' };
 
   try {
     const updatePayload: any = {
       status,
       updated_at: new Date().toISOString(),
     };
-    if (rejectionReason) {
+    if (rejectionReason !== undefined) {
       updatePayload.rejection_reason = rejectionReason;
     }
 
@@ -257,12 +411,12 @@ export async function updateVacationStatusInSupabase(
 
     if (error) {
       console.warn('Erro ao atualizar status no Supabase:', error.message);
-      return false;
+      return { success: false, error: error.message };
     }
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.error('Erro ao atualizar no Supabase:', err);
-    return false;
+    return { success: false, error: err.message };
   }
 }
 

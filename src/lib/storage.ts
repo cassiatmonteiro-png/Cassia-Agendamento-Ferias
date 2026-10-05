@@ -21,6 +21,12 @@ import {
   fetchAllFromSupabase, 
   insertVacationToSupabase, 
   updateVacationStatusInSupabase,
+  insertDepartmentToSupabase,
+  insertEmployeeToSupabase,
+  updateEmployeeInSupabase,
+  insertAccrualPeriodsToSupabase,
+  updateAccrualPeriodInSupabase,
+  pushAllLocalDataToSupabase,
   testSupabaseConnection
 } from './supabase.ts';
 
@@ -119,6 +125,12 @@ class VacationDataStore {
     const newDep: Department = { id: newId, ...dep };
     this.departments.push(newDep);
     this.saveToStorage();
+
+    // Sincroniza em segundo plano com o Supabase se conectado
+    insertDepartmentToSupabase(newDep).catch(err => {
+      console.warn('Erro ao sincronizar departamento no Supabase:', err);
+    });
+
     return newDep;
   }
 
@@ -141,6 +153,18 @@ class VacationDataStore {
     this.accrualPeriods.push(...generatedPeriods);
 
     this.saveToStorage();
+
+    // Sincroniza colaborador e períodos com Supabase em segundo plano
+    insertEmployeeToSupabase(newEmployee).then(res => {
+      if (res.success) {
+        insertAccrualPeriodsToSupabase(generatedPeriods).catch(e => {
+          console.warn('Erro ao salvar períodos no Supabase:', e);
+        });
+      }
+    }).catch(err => {
+      console.warn('Erro ao salvar colaborador no Supabase:', err);
+    });
+
     return newEmployee;
   }
 
@@ -149,6 +173,12 @@ class VacationDataStore {
     if (idx === -1) return null;
     this.employees[idx] = { ...this.employees[idx], ...data };
     this.saveToStorage();
+
+    // Sincroniza alteração no Supabase
+    updateEmployeeInSupabase(id, data).catch(err => {
+      console.warn('Erro ao atualizar colaborador no Supabase:', err);
+    });
+
     return this.employees[idx];
   }
 
@@ -306,7 +336,13 @@ class VacationDataStore {
     this.saveToStorage();
 
     // Sincroniza em segundo plano com o Supabase se configurado
-    insertVacationToSupabase(newRequest).catch(err => {
+    insertVacationToSupabase(newRequest).then(res => {
+      if (res.success) {
+        updateAccrualPeriodInSupabase(period).catch(e => {
+          console.warn('Erro ao atualizar saldo no Supabase:', e);
+        });
+      }
+    }).catch(err => {
       console.warn('Sincronização em background com Supabase pendente:', err);
     });
 
@@ -329,9 +365,10 @@ class VacationDataStore {
       req.rejectionReason = rejectionReason;
     }
 
+    const period = this.accrualPeriods.find(p => p.id === req.accrualPeriodId);
+
     // Se foi rejeitada ou cancelada, devolve os dias ao período aquisitivo
     if ((newStatus === 'REJEITADA' || newStatus === 'CANCELADA') && oldStatus !== 'REJEITADA' && oldStatus !== 'CANCELADA') {
-      const period = this.accrualPeriods.find(p => p.id === req.accrualPeriodId);
       if (period) {
         period.daysTaken = Math.max(0, period.daysTaken - req.durationDays);
         period.daysSold = Math.max(0, period.daysSold - req.sellDays);
@@ -342,11 +379,27 @@ class VacationDataStore {
     this.saveToStorage();
 
     // Sincroniza em segundo plano com o Supabase se configurado
-    updateVacationStatusInSupabase(requestId, newStatus, rejectionReason).catch(err => {
+    updateVacationStatusInSupabase(requestId, newStatus, rejectionReason).then(() => {
+      if (period) {
+        updateAccrualPeriodInSupabase(period).catch(e => {
+          console.warn('Erro ao atualizar saldo no Supabase:', e);
+        });
+      }
+    }).catch(err => {
       console.warn('Atualização no Supabase pendente:', err);
     });
 
     return req;
+  }
+
+  // Envia todos os dados locais em massa para o Supabase
+  public async pushAllToSupabase(): Promise<{ success: boolean; message: string }> {
+    return await pushAllLocalDataToSupabase({
+      departments: this.departments,
+      employees: this.employees,
+      accrualPeriods: this.accrualPeriods,
+      vacations: this.vacationRequests,
+    });
   }
 
   // Sincroniza dados do Supabase para o estado local
