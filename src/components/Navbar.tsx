@@ -14,8 +14,8 @@ import {
 import { Employee, UserRole } from '../types/index.ts';
 
 interface NavbarProps {
-  currentTab: 'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt' | 'sql';
-  setCurrentTab: (tab: 'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt' | 'sql') => void;
+  currentTab: 'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt';
+  setCurrentTab: (tab: 'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt') => void;
   currentUser: Employee;
   allEmployees: Employee[];
   onSelectUser: (employeeId: number) => void;
@@ -183,18 +183,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             <span>Regras CLT & Limite 7 Dias</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentTab('sql')}
-            className={`flex items-center space-x-2 px-3 py-2 text-xs font-medium rounded-lg transition shrink-0 ${
-              currentTab === 'sql'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Banco PostgreSQL (SQL)</span>
           </button>
         </div>
       </nav>

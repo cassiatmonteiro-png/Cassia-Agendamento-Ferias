@@ -18,12 +18,11 @@ import { VacationCalendar } from './components/VacationCalendar.tsx';
 import { VacationHistoryView } from './components/VacationHistoryView.tsx';
 import { EmployeesManagement } from './components/EmployeesManagement.tsx';
 import { CLTGuidelinesModal } from './components/CLTGuidelinesModal.tsx';
-import { SqlViewerModal } from './components/SqlViewerModal.tsx';
 import { VacationRequestModal } from './components/VacationRequestModal.tsx';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt' | 'sql'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'calendar' | 'vacations' | 'employees' | 'clt'>('dashboard');
 
   // Dados do Estado
   const [currentUser, setCurrentUser] = useState<Employee>(vacationStore.getCurrentUser());
@@ -168,10 +167,6 @@ export default function App() {
 
         {currentTab === 'clt' && (
           <CLTGuidelinesModal />
-        )}
-
-        {currentTab === 'sql' && (
-          <SqlViewerModal />
         )}
       </main>
 

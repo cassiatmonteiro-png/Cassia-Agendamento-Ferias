@@ -1,6 +1,5 @@
 -- ============================================================================
--- SCRIPT SQL PARA SUPABASE (SEM COMANDOS 'DROP')
--- 100% Seguro - Não dispara avisos de operações destrutivas no Supabase
+-- SCRIPT SQL PARA SUPABASE (TABELAS + CARGA COMPLETA DE DADOS)
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -92,7 +91,7 @@ ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accrual_periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vacation_requests ENABLE ROW LEVEL SECURITY;
 
--- 6. Criação de Políticas RLS sem usar 'DROP' (Tratamento silencioso de duplicatas)
+-- 6. Políticas RLS seguras
 DO $$ 
 BEGIN
     BEGIN
@@ -120,7 +119,7 @@ BEGIN
     END;
 END $$;
 
--- 7. Carga Inicial de Dados (com ON CONFLICT seguro)
+-- 7. Carga de Departamentos
 INSERT INTO public.departments (id, name, code, description) VALUES
 (1, 'Tecnologia da Informação', 'TI', 'Engenharia de Software e Infraestrutura'),
 (2, 'Recursos Humanos', 'RH', 'Departamento Pessoal e Treinamento'),
@@ -129,6 +128,7 @@ INSERT INTO public.departments (id, name, code, description) VALUES
 (5, 'Comercial e Vendas', 'COM', 'Expansão de Negócios')
 ON CONFLICT (id) DO NOTHING;
 
+-- 8. Carga de Colaboradores
 INSERT INTO public.employees (id, name, email, cpf, registration_number, role, department_id, manager_id, hire_date, job_title) VALUES
 (1, 'Carlos Eduardo Silveira', 'carlos.silveira@empresa.com.br', '111.222.333-44', 'MAT-1001', 'ADMIN', 1, NULL, '2021-02-15', 'Diretor de TI'),
 (2, 'Ana Paula Mendes', 'ana.mendes@empresa.com.br', '222.333.444-55', 'MAT-1002', 'RH', 2, 1, '2022-03-01', 'Coordenadora de RH'),
@@ -139,8 +139,27 @@ INSERT INTO public.employees (id, name, email, cpf, registration_number, role, d
 (7, 'Felipe Sampaio', 'felipe.sampaio@empresa.com.br', '777.888.999-00', 'MAT-1007', 'FUNCIONARIO', 1, 4, '2024-02-10', 'Engenheiro DevOps')
 ON CONFLICT (id) DO NOTHING;
 
--- 8. Sincronizar contadores de sequência
-SELECT setval('public.departments_id_seq', COALESCE((SELECT MAX(id) FROM public.departments), 1));
-SELECT setval('public.employees_id_seq', COALESCE((SELECT MAX(id) FROM public.employees), 1));
-SELECT setval('public.accrual_periods_id_seq', COALESCE((SELECT MAX(id) FROM public.accrual_periods), 1));
-SELECT setval('public.vacation_requests_id_seq', COALESCE((SELECT MAX(id) FROM public.vacation_requests), 1));
+-- 9. Carga de Períodos Aquisitivos e Concessivos CLT
+INSERT INTO public.accrual_periods (id, employee_id, period_number, acquisitive_start, acquisitive_end, concessive_start, concessive_end, total_days_entitled, days_taken, days_sold, days_remaining, status) VALUES
+(1, 5, 1, '2022-08-15', '2023-08-14', '2023-08-15', '2024-08-14', 30, 30, 0, 0, 'CONCEDIDO'),
+(2, 5, 2, '2023-08-15', '2024-08-14', '2024-08-15', '2025-08-14', 30, 15, 0, 15, 'ADQUIRIDO'),
+(3, 5, 3, '2024-08-15', '2025-08-14', '2025-08-15', '2026-08-14', 30, 0, 0, 30, 'ADQUIRIDO'),
+(4, 6, 1, '2023-01-20', '2024-01-19', '2024-01-20', '2025-01-19', 30, 30, 0, 0, 'CONCEDIDO'),
+(5, 6, 2, '2024-01-20', '2025-01-19', '2025-01-20', '2026-01-19', 30, 0, 0, 30, 'ADQUIRIDO'),
+(6, 7, 1, '2024-02-10', '2025-02-09', '2025-02-10', '2026-02-09', 30, 0, 0, 30, 'ADQUIRIDO'),
+(7, 3, 1, '2023-05-10', '2024-05-09', '2024-05-10', '2025-05-09', 30, 30, 0, 0, 'CONCEDIDO'),
+(8, 3, 2, '2024-05-10', '2025-05-09', '2025-05-10', '2026-05-09', 30, 10, 0, 20, 'ADQUIRIDO')
+ON CONFLICT (id) DO NOTHING;
+
+-- 10. Carga de Solicitações de Férias (com o teste da regra de sobreposição <= 7 dias)
+INSERT INTO public.vacation_requests (id, employee_id, accrual_period_id, start_date, end_date, duration_days, installment_number, sell_days, status, has_department_overlap, overlap_days, conflicting_employee_id, notes) VALUES
+(1, 5, 2, '2026-11-03', '2026-11-17', 15, 1, 0, 'APROVADA_RH', FALSE, 0, NULL, '1ª fração de 15 dias (cumpre período >= 14 dias)'),
+(2, 6, 2, '2026-11-12', '2026-11-26', 15, 1, 0, 'APROVADA_RH', TRUE, 6, 5, 'Sobreposição autorizada de 6 dias (12 a 17/11) com Lucas Rocha. Dentro da tolerância de até 7 dias.'),
+(3, 3, 8, '2026-10-13', '2026-10-22', 10, 2, 0, 'APROVADA_RH', FALSE, 0, NULL, 'Férias de 10 dias após o feriado')
+ON CONFLICT (id) DO NOTHING;
+
+-- 11. Ajustar contadores de auto-incremento para novas inserções
+SELECT setval('public.departments_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.departments));
+SELECT setval('public.employees_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.employees));
+SELECT setval('public.accrual_periods_id_seq', (SELECT COALESCE(MAX(id) ,1) FROM public.accrual_periods));
+SELECT setval('public.vacation_requests_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.vacation_requests));

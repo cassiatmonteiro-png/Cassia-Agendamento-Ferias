@@ -265,3 +265,103 @@ export async function updateVacationStatusInSupabase(
     return false;
   }
 }
+
+/**
+ * Envia todos os dados locais para as tabelas do Supabase (Upsert em massa)
+ */
+export async function pushAllLocalDataToSupabase(params: {
+  departments: Department[];
+  employees: Employee[];
+  accrualPeriods: AccrualPeriod[];
+  vacations: VacationRequest[];
+}): Promise<{ success: boolean; message: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase não conectado. Informe a URL e a Anon Key nas configurações.' };
+  }
+
+  try {
+    // 1. Departamentos
+    if (params.departments.length > 0) {
+      const depsPayload = params.departments.map(d => ({
+        id: d.id,
+        name: d.name,
+        code: d.code,
+        description: d.description,
+        max_concurrent_vacations: d.maxConcurrentVacations
+      }));
+      const { error: dErr } = await client.from('departments').upsert(depsPayload, { onConflict: 'id' });
+      if (dErr) throw dErr;
+    }
+
+    // 2. Colaboradores
+    if (params.employees.length > 0) {
+      const empsPayload = params.employees.map(e => ({
+        id: e.id,
+        name: e.name,
+        email: e.email,
+        cpf: e.cpf,
+        registration_number: e.registrationNumber,
+        role: e.role,
+        department_id: e.departmentId,
+        manager_id: e.managerId,
+        hire_date: e.hireDate,
+        job_title: e.jobTitle,
+        active: e.active
+      }));
+      const { error: eErr } = await client.from('employees').upsert(empsPayload, { onConflict: 'id' });
+      if (eErr) throw eErr;
+    }
+
+    // 3. Períodos Aquisitivos
+    if (params.accrualPeriods.length > 0) {
+      const accsPayload = params.accrualPeriods.map(a => ({
+        id: a.id,
+        employee_id: a.employeeId,
+        period_number: a.periodNumber,
+        acquisitive_start: a.acquisitiveStart,
+        acquisitive_end: a.acquisitiveEnd,
+        concessive_start: a.concessiveStart,
+        concessive_end: a.concessiveEnd,
+        total_days_entitled: a.totalDaysEntitled,
+        days_taken: a.daysTaken,
+        days_sold: a.daysSold,
+        days_remaining: a.daysRemaining,
+        status: a.status
+      }));
+      const { error: aErr } = await client.from('accrual_periods').upsert(accsPayload, { onConflict: 'id' });
+      if (aErr) throw aErr;
+    }
+
+    // 4. Solicitações de Férias
+    if (params.vacations.length > 0) {
+      const vacsPayload = params.vacations.map(v => ({
+        id: v.id,
+        employee_id: v.employeeId,
+        accrual_period_id: v.accrualPeriodId,
+        start_date: v.startDate,
+        end_date: v.endDate,
+        duration_days: v.durationDays,
+        installment_number: v.installmentNumber,
+        sell_days: v.sellDays,
+        status: v.status,
+        has_department_overlap: v.hasDepartmentOverlap,
+        overlap_days: v.overlapDays,
+        conflicting_employee_id: v.conflictingEmployeeId,
+        notes: v.notes || null,
+        rejection_reason: v.rejectionReason || null,
+        created_at: v.createdAt,
+        updated_at: v.updatedAt
+      }));
+      const { error: vErr } = await client.from('vacation_requests').upsert(vacsPayload, { onConflict: 'id' });
+      if (vErr) throw vErr;
+    }
+
+    return { 
+      success: true, 
+      message: `Sucesso! ${params.departments.length} departamentos, ${params.employees.length} colaboradores, ${params.accrualPeriods.length} períodos e ${params.vacations.length} solicitações de férias foram sincronizados com o Supabase!` 
+    };
+  } catch (err: any) {
+    return { success: false, message: `Erro ao enviar dados para o Supabase: ${err.message}` };
+  }
+}
